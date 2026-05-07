@@ -1,0 +1,619 @@
+<!doctype html>
+<html>
+
+<head>
+
+  <meta charset="utf-8" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+
+  <title>AI Chatbot</title>
+
+  <style>
+
+    body {
+
+      margin: 0;
+
+      font-family: Arial;
+
+      background: #f5f5f5;
+    }
+
+    .container {
+
+      max-width: 900px;
+
+      margin: auto;
+
+      padding: 20px;
+    }
+
+    .topbar {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      align-items: center;
+    }
+
+    .chat-box {
+
+      background: white;
+
+      height: 500px;
+
+      overflow-y: auto;
+
+      padding: 20px;
+
+      border-radius: 10px;
+
+      margin-top: 20px;
+
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .message {
+
+      margin-bottom: 15px;
+    }
+
+    .user {
+
+      text-align: right;
+    }
+
+    .bot {
+
+      text-align: left;
+    }
+
+    .bubble {
+
+      display: inline-block;
+
+      padding: 12px;
+
+      border-radius: 12px;
+
+      max-width: 70%;
+    }
+
+    .user .bubble {
+
+      background: #007bff;
+
+      color: white;
+    }
+
+    .bot .bubble {
+
+      background: #eee;
+    }
+
+    .controls {
+
+      display: flex;
+
+      gap: 10px;
+
+      margin-top: 20px;
+    }
+
+    input[type="text"] {
+
+      flex: 1;
+
+      padding: 12px;
+
+      border-radius: 8px;
+
+      border: 1px solid #ccc;
+    }
+
+    button {
+
+      padding: 12px 20px;
+
+      border: none;
+
+      border-radius: 8px;
+
+      cursor: pointer;
+
+      background: #007bff;
+
+      color: white;
+    }
+
+    img {
+
+      max-width: 100%;
+
+      border-radius: 10px;
+
+      margin-top: 10px;
+    }
+
+    .upload-row {
+
+      display: flex;
+
+      gap: 40px;
+
+      margin-top: 15px;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <div class="container">
+
+    <div class="topbar">
+
+      <h2>AI Chatbot</h2>
+
+      <button id="newChatBtn">
+        New Chat
+      </button>
+
+    </div>
+
+    <div id="root"></div>
+
+  </div>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+
+    const {
+      useState,
+      useEffect,
+      useRef
+    } = React;
+
+    function App() {
+
+      const [messages, setMessages] =
+        useState([]);
+
+      const [input, setInput] =
+        useState('');
+
+      const [loading, setLoading] =
+        useState(false);
+
+      const chatRef = useRef();
+
+      useEffect(() => {
+
+        document
+          .getElementById('newChatBtn')
+          .onclick = newChat;
+
+      }, []);
+
+      useEffect(() => {
+
+        if (chatRef.current) {
+
+          chatRef.current.scrollTop =
+            chatRef.current.scrollHeight;
+        }
+
+      }, [messages]);
+
+      async function sendMessage() {
+
+        if (!input.trim()) return;
+
+        const userMessage = {
+
+          role: 'user',
+
+          type: 'text',
+
+          content: input
+        };
+
+        setMessages(prev => [
+
+          ...prev,
+
+          userMessage
+        ]);
+
+        setLoading(true);
+
+        try {
+
+          const res = await fetch(
+
+            'http://localhost:3000/chat',
+
+            {
+
+              method: 'POST',
+
+              headers: {
+
+                'Content-Type':
+                  'application/json'
+              },
+
+              body: JSON.stringify({
+
+                message: input
+              })
+            }
+          );
+
+          const data = await res.json();
+
+          if (data.type === 'image') {
+
+            setMessages(prev => [
+
+              ...prev,
+
+              {
+
+                role: 'bot',
+
+                type: 'image',
+
+                content: data.image
+              }
+            ]);
+
+          } else {
+
+            setMessages(prev => [
+
+              ...prev,
+
+              {
+
+                role: 'bot',
+
+                type: 'text',
+
+                content:
+                  data.reply ||
+                  data.error
+              }
+            ]);
+          }
+
+        } catch (err) {
+
+          setMessages(prev => [
+
+            ...prev,
+
+            {
+
+              role: 'bot',
+
+              type: 'text',
+
+              content:
+                'Server error'
+            }
+          ]);
+        }
+
+        setInput('');
+
+        setLoading(false);
+      }
+
+      async function uploadFile(file) {
+
+        if (!file) return;
+
+        const formData = new FormData();
+
+        formData.append('file', file);
+
+        try {
+
+          await fetch(
+
+            'http://localhost:3000/upload',
+
+            {
+
+              method: 'POST',
+
+              body: formData
+            }
+          );
+
+          setMessages(prev => [
+
+            ...prev,
+
+            {
+
+              role: 'bot',
+
+              type: 'text',
+
+              content:
+                'File uploaded successfully'
+            }
+          ]);
+
+        } catch (err) {
+
+          console.log(err);
+        }
+      }
+
+      async function newChat() {
+
+        await fetch(
+
+          'http://localhost:3000/reset',
+
+          {
+
+            method: 'POST'
+          }
+        );
+
+        setMessages([]);
+
+      }
+
+      return (
+
+        <div>
+
+          <div
+            className="chat-box"
+            ref={chatRef}
+          >
+
+            {
+
+              messages.map((msg, index) => (
+
+                <div
+
+                  key={index}
+
+                  className={
+                    'message ' +
+                    msg.role
+                  }
+                >
+
+                  <div className="bubble">
+
+                    {
+
+                      msg.type === 'image'
+
+                      ? (
+
+                        <img
+                          src={msg.content}
+                        />
+                      )
+
+                      : (
+
+                        msg.content
+                      )
+                    }
+
+                  </div>
+
+                </div>
+              ))
+            }
+
+            {
+
+              loading && (
+
+                <div className="bot">
+
+                  <div className="bubble">
+
+                    Thinking...
+
+                  </div>
+
+                </div>
+              )
+            }
+
+          </div>
+
+          <div className="upload-row">
+
+            <div>
+
+              <label
+                style={{
+                  fontWeight: 'bold',
+                  display: 'block',
+                  marginBottom: '5px'
+                }}
+              >
+                Upload Document (PDF/TXT)
+              </label>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+
+                <input
+
+                  id="docInput"
+
+                  type="file"
+
+                  accept=".pdf,.txt"
+
+                  onChange={(e) => {
+
+                    uploadFile(
+                      e.target.files[0]
+                    );
+                  }}
+                />
+
+                <button
+
+                  style={{
+                    background: 'red',
+                    padding: '5px 10px'
+                  }}
+
+                  onClick={() => {
+
+                    document.getElementById(
+                      'docInput'
+                    ).value = '';
+                  }}
+                >
+
+                  X
+
+                </button>
+
+              </div>
+
+            </div>
+
+            <div>
+
+              <label
+                style={{
+                  fontWeight: 'bold',
+                  display: 'block',
+                  marginBottom: '5px'
+                }}
+              >
+                Upload Image (PNG/JPG)
+              </label>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+
+                <input
+
+                  id="imgInput"
+
+                  type="file"
+
+                  accept="image/png,image/jpeg"
+
+                  onChange={(e) => {
+
+                    uploadFile(
+                      e.target.files[0]
+                    );
+                  }}
+                />
+
+                <button
+
+                  style={{
+                    background: 'red',
+                    padding: '5px 10px'
+                  }}
+
+                  onClick={() => {
+
+                    document.getElementById(
+                      'imgInput'
+                    ).value = '';
+                  }}
+                >
+
+                  X
+
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          <div className="controls">
+
+            <input
+
+              type="text"
+
+              placeholder="Type message..."
+
+              value={input}
+
+              onChange={(e) =>
+
+                setInput(e.target.value)
+              }
+
+              onKeyDown={(e) => {
+
+                if (e.key === 'Enter') {
+
+                  sendMessage();
+                }
+              }}
+            />
+
+            <button
+              onClick={sendMessage}
+            >
+
+              Send
+
+            </button>
+
+          </div>
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(
+
+      document.getElementById('root')
+
+    ).render(<App />);
+
+  </script>
+
+</body>
+
+</html>
